@@ -1,7 +1,7 @@
 import pandas as pd
 
 # -----------------------------------
-# Detect column
+# Detect column name from question
 # -----------------------------------
 
 def detect_column(question, df):
@@ -22,26 +22,28 @@ def detect_column(question, df):
 
 def process_query(question, df):
 
-    question = question.lower()
+    question = question.lower().strip()
+
+    print("QUESTION:", question)
 
     # -----------------------------------
-    # Total rows
+    # ROW COUNT
     # -----------------------------------
 
-    if "rows" in question:
+    if "row" in question:
 
         return f"Dataset contains {len(df)} rows"
 
     # -----------------------------------
-    # Columns
+    # COLUMNS
     # -----------------------------------
 
-    elif "columns" in question:
+    elif "column" in question:
 
         return list(df.columns)
 
     # -----------------------------------
-    # Show Data
+    # SHOW DATA
     # -----------------------------------
 
     elif "show data" in question or "head" in question:
@@ -49,7 +51,7 @@ def process_query(question, df):
         return df.head().to_string()
 
     # -----------------------------------
-    # Dataset Summary
+    # SUMMARY
     # -----------------------------------
 
     elif "summary" in question or "describe" in question:
@@ -57,7 +59,7 @@ def process_query(question, df):
         return df.describe().to_string()
 
     # -----------------------------------
-    # Average
+    # AVERAGE
     # -----------------------------------
 
     elif "average" in question or "mean" in question:
@@ -71,7 +73,7 @@ def process_query(question, df):
         return "Column not found"
 
     # -----------------------------------
-    # Sum
+    # SUM / TOTAL
     # -----------------------------------
 
     elif "sum" in question or "total" in question:
@@ -85,7 +87,7 @@ def process_query(question, df):
         return "Column not found"
 
     # -----------------------------------
-    # Maximum
+    # MAXIMUM
     # -----------------------------------
 
     elif "max" in question or "highest" in question:
@@ -99,7 +101,7 @@ def process_query(question, df):
         return "Column not found"
 
     # -----------------------------------
-    # Minimum
+    # MINIMUM
     # -----------------------------------
 
     elif "min" in question or "lowest" in question:
@@ -113,7 +115,7 @@ def process_query(question, df):
         return "Column not found"
 
     # -----------------------------------
-    # Unique values
+    # UNIQUE VALUES
     # -----------------------------------
 
     elif "unique" in question:
@@ -127,7 +129,7 @@ def process_query(question, df):
         return "Column not found"
 
     # -----------------------------------
-    # Group By
+    # GROUPBY
     # Example:
     # sales by region
     # -----------------------------------
@@ -141,6 +143,9 @@ def process_query(question, df):
             value_col = words[0].strip().split()[-1]
 
             group_col = words[1].strip()
+
+            print("VALUE COL:", value_col)
+            print("GROUP COL:", group_col)
 
             actual_value_col = None
             actual_group_col = None
