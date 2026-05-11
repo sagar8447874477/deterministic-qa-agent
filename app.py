@@ -88,8 +88,6 @@ if uploaded_file is not None:
 
         st.write("""
         - profit by category
-        - sales by region
-        - profit every month
         """)
 
         # -----------------------------------
