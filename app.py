@@ -1,118 +1,48 @@
 import streamlit as st
 import pandas as pd
 
-from query_engine import process_query
+from query_engine import handle_query, describe_dataset
 
-# -----------------------------------
-# Streamlit Page Config
-# -----------------------------------
-
-st.set_page_config(
-    page_title="CSV Analytics QA Agent",
-    layout="wide"
-)
-
-# -----------------------------------
-# Title
-# -----------------------------------
+st.set_page_config(page_title="Deterministic CSV QA Agent", layout="wide")
 
 st.title("Deterministic CSV Analytics QA Agent")
 
-st.write(
-    "Upload any CSV and ask analytics questions."
-)
+uploaded_file = st.file_uploader("Upload CSV", type=["csv"])
 
-# -----------------------------------
-# Upload CSV
-# -----------------------------------
-
-uploaded_file = st.file_uploader(
-    "Upload CSV File",
-    type=["csv"]
-)
-
-# -----------------------------------
-# If CSV Uploaded
-# -----------------------------------
+if "df" not in st.session_state:
+    st.session_state.df = None
 
 if uploaded_file is not None:
+    st.session_state.df = pd.read_csv(uploaded_file)
 
-    try:
+df = st.session_state.df
 
-        # Read CSV
-        df = pd.read_csv(uploaded_file)
+if df is None:
+    st.info("Upload a CSV file to start.")
+    st.stop()
 
-        # -----------------------------------
-        # Dataset Preview
-        # -----------------------------------
+st.subheader("Dataset Preview")
+st.dataframe(df.head(20), use_container_width=True)
 
-        st.subheader("Dataset Preview")
+st.subheader("Ask a question")
+query = st.text_input("Examples: how many rows, average sales, sales by region, what was dau last week?")
 
-        st.dataframe(df.head())
+if st.button("Run query") and query.strip():
+    result = handle_query(df, query)
 
-        # -----------------------------------
-        # Dataset Info
-        # -----------------------------------
-
-        st.subheader("Dataset Information")
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-
-            st.metric(
-                "Rows",
-                len(df)
-            )
-
-        with col2:
-
-            st.metric(
-                "Columns",
-                len(df.columns)
-            )
-
-        # -----------------------------------
-        # Show Columns
-        # -----------------------------------
-
-        st.subheader("Detected Columns")
-
-        st.write(df.columns.tolist())
-
-        # -----------------------------------
-        # Example Questions
-        # -----------------------------------
-
-        st.subheader("Example Questions")
-
-        st.write("""
-        - profit by category
-        """)
-
-        # -----------------------------------
-        # Question Input
-        # -----------------------------------
-
-        question = st.text_input(
-            "Ask a question about your data"
+    if result.answer_type == "dataframe":
+        st.success(result.message)
+        st.dataframe(result.data, use_container_width=True)
+        st.download_button(
+            "Download result as CSV",
+            result.data.to_csv(index=False).encode("utf-8"),
+            file_name="query_result.csv",
+            mime="text/csv",
         )
+    elif result.answer_type == "error":
+        st.error(result.message)
+    else:
+        st.warning(result.message)
 
-        # -----------------------------------
-        # Ask Button
-        # -----------------------------------
-
-        if st.button("Ask Question"):
-
-            answer = process_query(
-                question,
-                df
-            )
-
-            st.subheader("Answer")
-
-            st.write(answer)
-
-    except Exception as e:
-
-        st.error(str(e))
+with st.expander("Describe dataset"):
+    st.dataframe(describe_dataset(df), use_container_width=True)
