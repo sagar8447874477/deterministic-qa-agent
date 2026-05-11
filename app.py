@@ -1,20 +1,17 @@
 import os
 import sys
 
-import pandas as pd
-import streamlit as st
-
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 if BASE_DIR not in sys.path:
     sys.path.insert(0, BASE_DIR)
 
+import pandas as pd
+import streamlit as st
+
 from query_engine import handle_query, describe_dataset
 
-
 st.set_page_config(page_title="Deterministic CSV QA Agent", layout="wide")
-
 st.title("Deterministic CSV Analytics QA Agent")
-
 st.write("Upload a CSV and ask questions like: how many rows, show columns, average sales, or what was dau last week?")
 
 uploaded_file = st.file_uploader("Upload CSV", type=["csv"])
