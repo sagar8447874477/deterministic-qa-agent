@@ -27,12 +27,28 @@ TIME_PATTERNS = {
 USER_COL_HINTS = [
     "user_id",
     "userid",
+    "user id",
     "uid",
-    "user",
     "customer_id",
+    "customer id",
     "account_id",
+    "account id",
     "member_id",
+    "member id",
     "visitor_id",
+    "visitor id",
+    "anonymous_id",
+    "anonymous id",
+    "device_id",
+    "device id",
+    "client_id",
+    "client id",
+    "profile_id",
+    "profile id",
+    "session_id",
+    "session id",
+    "email",
+    "phone",
 ]
 
 DATE_COL_HINTS = [
@@ -45,6 +61,14 @@ DATE_COL_HINTS = [
     "event_time",
     "event_date",
 ]
+
+AGG_ALIASES = {
+    "sum": ["total", "sum", "sales", "revenue", "profit", "amount", "by"],
+    "mean": ["average", "avg", "mean"],
+    "max": ["highest", "max", "maximum", "largest", "top"],
+    "min": ["lowest", "min", "minimum", "smallest", "bottom"],
+    "count": ["count", "number of", "how many"],
+}
 
 
 @dataclass
@@ -73,6 +97,15 @@ def detect_time_window(query: str) -> Optional[str]:
         if phrase in q:
             return window
     return None
+
+
+def detect_agg_func(query: str) -> str:
+    q = normalize_text(query)
+    for func, aliases in AGG_ALIASES.items():
+        for alias in aliases:
+            if alias in q:
+                return func
+    return "sum"
 
 
 def detect_column_by_fuzzy(columns: List[str], hints: List[str]) -> Optional[str]:
@@ -121,11 +154,48 @@ def infer_user_column(df: pd.DataFrame) -> Optional[str]:
 
     for c in df.columns:
         name = c.lower()
-        if any(k in name for k in ["user", "customer", "member", "visitor", "account"]):
+        if any(k in name for k in [
+            "user", "customer", "member", "visitor", "account",
+            "anonymous", "device", "client", "profile", "session"
+        ]):
             return c
 
+    return None
+
+
+def infer_numeric_column(df: pd.DataFrame, metric_name: str) -> Optional[str]:
+    metric_name = metric_name.lower().strip()
+    if metric_name:
+        for c in df.columns:
+            if metric_name in c.lower():
+                return c
+
+    numeric_cols = [c for c in df.columns if pd.api.types.is_numeric_dtype(df[c])]
+    if numeric_cols:
+        return numeric_cols[0]
+
+    for c in df.columns:
+        if df[c].dtype == "object":
+            converted = pd.to_numeric(df[c], errors="coerce")
+            if converted.notna().mean() >= 0.7:
+                return c
+
+    return None
+
+
+def infer_group_column(df: pd.DataFrame, group_name: str) -> Optional[str]:
+    group_name = group_name.lower().strip()
+    if group_name:
+        for c in df.columns:
+            if group_name in c.lower():
+                return c
+
     obj_cols = [c for c in df.columns if df[c].dtype == "object"]
-    return obj_cols[0] if obj_cols else None
+    if obj_cols:
+        return obj_cols[0]
+
+    non_numeric = [c for c in df.columns if not pd.api.types.is_numeric_dtype(df[c])]
+    return non_numeric[0] if non_numeric else None
 
 
 def parse_time_window(df: pd.DataFrame, date_col: str, window: str) -> Tuple[pd.DataFrame, str]:
@@ -269,42 +339,31 @@ def describe_dataset(df: pd.DataFrame) -> pd.DataFrame:
     })
 
 
-def handle_query(df: pd.DataFrame, query: str) -> QueryResult:
+def handle_by_query(df: pd.DataFrame, query: str) -> Optional[QueryResult]:
     q = normalize_text(query)
 
-    if any(p in q for p in ["how many rows", "row count", "total rows"]):
-        return count_rows(df)
+    m = re.match(
+        r"^(?:show|find|give|what is|what are)?\s*([a-zA-Z0-9_ ]+?)\s+by\s+([a-zA-Z0-9_ ]+?)\s*$",
+        q
+    )
+    if not m:
+        return None
 
-    if any(p in q for p in ["show columns", "list columns", "columns"]):
-        return show_columns(df)
+    metric_part = m.group(1).strip()
+    group_part = m.group(2).strip()
 
-    if any(p in q for p in ["describe dataset", "dataset description", "describe data"]):
-        return QueryResult("dataframe", describe_dataset(df), "Dataset description.")
+    metric_col = infer_numeric_column(df, metric_part)
+    group_col = infer_group_column(df, group_part)
 
-    metric = detect_metric(q)
-    window = detect_time_window(q)
-    date_col = infer_datetime_column(df)
-    user_col = infer_user_column(df)
+    if metric_col is None:
+        return QueryResult("error", None, f"I could not detect a numeric column for '{metric_part}'.")
+    if group_col is None:
+        return QueryResult("error", None, f"I could not detect a group column for '{group_part}'.")
 
-    if metric == "dau":
-        if date_col is None:
-            return QueryResult("error", None, "I could not detect a date/timestamp column.")
-        if user_col is None:
-            return QueryResult("error", None, "I could not detect a user identifier column.")
-        return compute_dau(df, user_col, date_col, window)
+    agg_func = detect_agg_func(q)
 
-    if metric == "wau":
-        if date_col is None:
-            return QueryResult("error", None, "I could not detect a date/timestamp column.")
-        if user_col is None:
-            return QueryResult("error", None, "I could not detect a user identifier column.")
-        return compute_wau(df, user_col, date_col, window)
-
-    if metric == "mau":
-        if date_col is None:
-            return QueryResult("error", None, "I could not detect a date/timestamp column.")
-        if user_col is None:
-            return QueryResult("error", None, "I could not detect a user identifier column.")
-        return compute_mau(df, user_col, date_col, window)
-
-    return QueryResult("unsupported", None, "Query not recognized by deterministic engine.")
+    if agg_func == "sum":
+        result = df.groupby(group_col, dropna=False)[metric_col].sum().reset_index()
+    elif agg_func == "mean":
+        result = df.groupby(group_col, dropna=False)[metric_col].mean().reset_index()
+    elif agg_func 
