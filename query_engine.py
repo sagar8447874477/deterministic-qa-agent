@@ -25,45 +25,18 @@ TIME_PATTERNS = {
 }
 
 USER_COL_HINTS = [
-    "user_id",
-    "userid",
-    "user id",
-    "uid",
-    "customer_id",
-    "customer id",
-    "account_id",
-    "account id",
-    "member_id",
-    "member id",
-    "visitor_id",
-    "visitor id",
-    "anonymous_id",
-    "anonymous id",
-    "device_id",
-    "device id",
-    "client_id",
-    "client id",
-    "profile_id",
-    "profile id",
-    "session_id",
-    "session id",
-    "email",
-    "phone",
+    "user_id", "userid", "user id", "uid", "customer_id", "customer id", "account_id", "account id",
+    "member_id", "member id", "visitor_id", "visitor id", "anonymous_id", "anonymous id", "device_id",
+    "device id", "client_id", "client id", "profile_id", "profile id", "session_id", "session id",
+    "email", "phone"
 ]
 
 DATE_COL_HINTS = [
-    "date",
-    "datetime",
-    "timestamp",
-    "time",
-    "created_at",
-    "updated_at",
-    "event_time",
-    "event_date",
+    "date", "datetime", "timestamp", "time", "created_at", "updated_at", "event_time", "event_date"
 ]
 
 AGG_ALIASES = {
-    "sum": ["total", "sum", "sales", "revenue", "profit", "amount", "by"],
+    "sum": ["total", "sum", "sales", "revenue", "profit", "amount"],
     "mean": ["average", "avg", "mean"],
     "max": ["highest", "max", "maximum", "largest", "top"],
     "min": ["lowest", "min", "minimum", "smallest", "bottom"],
@@ -127,12 +100,7 @@ def infer_datetime_column(df: pd.DataFrame) -> Optional[str]:
         if pd.api.types.is_datetime64_any_dtype(df[col]):
             return col
 
-    candidates = []
-    for col in df.columns:
-        name = col.lower()
-        if any(h in name for h in DATE_COL_HINTS):
-            candidates.append(col)
-
+    candidates = [col for col in df.columns if any(h in col.lower() for h in DATE_COL_HINTS)]
     for col in candidates:
         parsed = pd.to_datetime(df[col], errors="coerce")
         if parsed.notna().mean() >= 0.6:
@@ -154,10 +122,7 @@ def infer_user_column(df: pd.DataFrame) -> Optional[str]:
 
     for c in df.columns:
         name = c.lower()
-        if any(k in name for k in [
-            "user", "customer", "member", "visitor", "account",
-            "anonymous", "device", "client", "profile", "session"
-        ]):
+        if any(k in name for k in ["user", "customer", "member", "visitor", "account", "anonymous", "device", "client", "profile", "session"]):
             return c
 
     return None
@@ -165,10 +130,9 @@ def infer_user_column(df: pd.DataFrame) -> Optional[str]:
 
 def infer_numeric_column(df: pd.DataFrame, metric_name: str) -> Optional[str]:
     metric_name = metric_name.lower().strip()
-    if metric_name:
-        for c in df.columns:
-            if metric_name in c.lower():
-                return c
+    for c in df.columns:
+        if metric_name and metric_name in c.lower():
+            return c
 
     numeric_cols = [c for c in df.columns if pd.api.types.is_numeric_dtype(df[c])]
     if numeric_cols:
@@ -185,10 +149,9 @@ def infer_numeric_column(df: pd.DataFrame, metric_name: str) -> Optional[str]:
 
 def infer_group_column(df: pd.DataFrame, group_name: str) -> Optional[str]:
     group_name = group_name.lower().strip()
-    if group_name:
-        for c in df.columns:
-            if group_name in c.lower():
-                return c
+    for c in df.columns:
+        if group_name and group_name in c.lower():
+            return c
 
     obj_cols = [c for c in df.columns if df[c].dtype == "object"]
     if obj_cols:
@@ -254,14 +217,7 @@ def compute_dau(df: pd.DataFrame, user_col: str, date_col: str, window: Optional
         return QueryResult("error", None, "No rows matched the requested time window.")
 
     work["__day"] = work[date_col].dt.floor("D")
-    daily = (
-        work.groupby("__day")[user_col]
-        .nunique()
-        .reset_index(name="dau")
-        .sort_values("__day")
-        .rename(columns={"__day": "date"})
-    )
-
+    daily = work.groupby("__day")[user_col].nunique().reset_index(name="dau").sort_values("__day").rename(columns={"__day": "date"})
     return QueryResult("dataframe", daily, f"Computed DAU successfully. {msg}")
 
 
@@ -282,14 +238,7 @@ def compute_wau(df: pd.DataFrame, user_col: str, date_col: str, window: Optional
         return QueryResult("error", None, "No rows matched the requested time window.")
 
     work["__week"] = work[date_col].dt.to_period("W").dt.start_time
-    weekly = (
-        work.groupby("__week")[user_col]
-        .nunique()
-        .reset_index(name="wau")
-        .sort_values("__week")
-        .rename(columns={"__week": "week"})
-    )
-
+    weekly = work.groupby("__week")[user_col].nunique().reset_index(name="wau").sort_values("__week").rename(columns={"__week": "week"})
     return QueryResult("dataframe", weekly, f"Computed WAU successfully. {msg}")
 
 
@@ -310,14 +259,7 @@ def compute_mau(df: pd.DataFrame, user_col: str, date_col: str, window: Optional
         return QueryResult("error", None, "No rows matched the requested time window.")
 
     work["__month"] = work[date_col].dt.to_period("M").dt.start_time
-    monthly = (
-        work.groupby("__month")[user_col]
-        .nunique()
-        .reset_index(name="mau")
-        .sort_values("__month")
-        .rename(columns={"__month": "month"})
-    )
-
+    monthly = work.groupby("__month")[user_col].nunique().reset_index(name="mau").sort_values("__month").rename(columns={"__month": "month"})
     return QueryResult("dataframe", monthly, f"Computed MAU successfully. {msg}")
 
 
@@ -341,11 +283,7 @@ def describe_dataset(df: pd.DataFrame) -> pd.DataFrame:
 
 def handle_by_query(df: pd.DataFrame, query: str) -> Optional[QueryResult]:
     q = normalize_text(query)
-
-    m = re.match(
-        r"^(?:show|find|give|what is|what are)?\s*([a-zA-Z0-9_ ]+?)\s+by\s+([a-zA-Z0-9_ ]+?)\s*$",
-        q
-    )
+    m = re.match(r"^(?:show|find|give|what is|what are)?\s*([a-zA-Z0-9_ ]+?)\s+by\s+([a-zA-Z0-9_ ]+?)\s*$", q)
     if not m:
         return None
 
@@ -366,4 +304,62 @@ def handle_by_query(df: pd.DataFrame, query: str) -> Optional[QueryResult]:
         result = df.groupby(group_col, dropna=False)[metric_col].sum().reset_index()
     elif agg_func == "mean":
         result = df.groupby(group_col, dropna=False)[metric_col].mean().reset_index()
-    elif agg_func 
+    elif agg_func == "max":
+        result = df.groupby(group_col, dropna=False)[metric_col].max().reset_index()
+    elif agg_func == "min":
+        result = df.groupby(group_col, dropna=False)[metric_col].min().reset_index()
+    else:
+        result = df.groupby(group_col, dropna=False)[metric_col].sum().reset_index()
+
+    result = result.sort_values(metric_col, ascending=False)
+    return QueryResult("dataframe", result, f"Grouped {metric_col} by {group_col} using {agg_func}.")
+
+
+def handle_query(
+    df: pd.DataFrame,
+    query: str,
+    date_col_override: Optional[str] = None,
+    user_col_override: Optional[str] = None
+) -> QueryResult:
+    q = normalize_text(query)
+
+    if any(p in q for p in ["how many rows", "row count", "total rows"]):
+        return count_rows(df)
+
+    if any(p in q for p in ["show columns", "list columns", "columns"]):
+        return show_columns(df)
+
+    if any(p in q for p in ["describe dataset", "dataset description", "describe data"]):
+        return QueryResult("dataframe", describe_dataset(df), "Dataset description.")
+
+    by_result = handle_by_query(df, query)
+    if by_result is not None:
+        return by_result
+
+    metric = detect_metric(q)
+    window = detect_time_window(q)
+    date_col = date_col_override or infer_datetime_column(df)
+    user_col = user_col_override or infer_user_column(df)
+
+    if metric == "dau":
+        if date_col is None:
+            return QueryResult("error", None, "I could not detect a date/timestamp column.")
+        if user_col is None:
+            return QueryResult("error", None, "I could not detect a user identifier column.")
+        return compute_dau(df, user_col, date_col, window)
+
+    if metric == "wau":
+        if date_col is None:
+            return QueryResult("error", None, "I could not detect a date/timestamp column.")
+        if user_col is None:
+            return QueryResult("error", None, "I could not detect a user identifier column.")
+        return compute_wau(df, user_col, date_col, window)
+
+    if metric == "mau":
+        if date_col is None:
+            return QueryResult("error", None, "I could not detect a date/timestamp column.")
+        if user_col is None:
+            return QueryResult("error", None, "I could not detect a user identifier column.")
+        return compute_mau(df, user_col, date_col, window)
+
+    return QueryResult("unsupported", None, "Query not recognized by deterministic engine.")
