@@ -87,15 +87,9 @@ if uploaded_file is not None:
         st.subheader("Example Questions")
 
         st.write("""
-        - how many rows
-        - average sales
-        - total profit
-        - highest sales
         - profit by category
         - sales by region
         - profit every month
-        - sales this month vs last month
-        - describe dataset
         """)
 
         # -----------------------------------
